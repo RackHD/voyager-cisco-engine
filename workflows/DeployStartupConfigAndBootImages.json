@@ -1,0 +1,65 @@
+{
+    "friendlyName": "Deploy Cisco Nexus 9000 switch",
+    "injectableName": "Graph.Switch.CiscoNexus3000.Deploy",
+    "options": {
+        "deploy-config-and-images": {
+            "startupConfig": null
+        }
+    },
+    "tasks": [
+        {
+            "label": "deploy-config-and-images",
+            "taskDefinition": {
+                "friendlyName": "Deploy switch config and images",
+                "injectableName": "Task.Inline.Switch.Deploy.Cisco",
+                "implementsTask": "Task.Base.Linux.Commands",
+                "options": {
+                    "startupConfig": null,
+                    "startupConfigUri": "{{ api.base }}/templates/{{ options.startupConfig }}?nodeId={{ task.nodeId }}",
+                    "staticDir": "cisco",
+                    "commands": [
+                        {
+                            "downloadUrl": "{{ api.templates }}/ciscoNexus-deploy-config-and-images.py?nodeId={{ task.nodeId }}"
+                        }
+                    ]
+                },
+                "properties": {}
+            }
+        },
+        {
+            "label": "catalog-switch-config",
+            "taskDefinition": {
+                "friendlyName": "Catalog Cisco Switch Config",
+                "injectableName": "Task.Inline.Catalog.Switch.Cisco.Config",
+                "implementsTask": "Task.Base.Linux.Commands",
+                "options": {
+                    "commands": [
+                        {
+                            "downloadUrl": "{{ api.templates }}/cisco-catalog-config.py?nodeId={{ task.nodeId }}",
+                            "catalog": { "format": "json", "source": "config" }
+                        }
+                    ]
+                },
+                "properties": {}
+            },
+            "waitOn": {
+                "deploy-config-and-images": "succeeded"
+            }
+        },
+        {
+            "label": "exit-config",
+            "taskDefinition": {
+                "friendlyName": "Exit switch taskrunner with success",
+                "injectableName": "Task.Inline.ExitSwitchTaskRunner.Succeeded",
+                "implementsTask": "Task.Base.ShellReboot",
+                "options": {
+                    "rebootCode": 0
+                },
+                "properties": {}
+            },
+            "waitOn": {
+                "catalog-switch-config": "succeeded"
+            }
+        }
+    ]
+}

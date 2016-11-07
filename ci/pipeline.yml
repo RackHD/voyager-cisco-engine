@@ -1,0 +1,117 @@
+jobs:
+- name: unit
+  plan:
+  - aggregate:
+    - get: voyager-cisco-engine
+      trigger: true
+    - get: concourse-whale
+  - task: unit
+    image: concourse-whale
+    config:
+      platform: linux
+      inputs:
+      - name: voyager-cisco-engine
+      params:
+        GITHUB_USER:        {{github_username}}
+        GITHUB_PASSWORD:    {{github_password}}
+      run:
+        path: voyager-cisco-engine/ci/tasks/unit.sh
+
+- name: integration
+  plan:
+  - aggregate:
+    - put: it-env
+      params: {acquire: true}
+    - get: voyager-cisco-engine
+      trigger: true
+      passed: [unit]
+    - get: concourse-whale
+  - task: integration
+    image: concourse-whale
+    config:
+      platform: linux
+      inputs:
+      - name: voyager-cisco-engine
+      - name: it-env
+      params:
+        GITHUB_USER:        {{github_username}}
+        GITHUB_PASSWORD:    {{github_password}}
+        INTEGRATION_VM_USER:      {{integration_vm_user}}
+        INTEGRATION_VM_SSH_KEY:   {{integration_vm_ssh_key}}
+      run:
+        path: voyager-cisco-engine/ci/tasks/integration.sh
+    ensure:
+      put: it-env
+      params: {release: it-env}
+
+- name: build-docker
+  serial: true
+  plan:
+  - aggregate:
+    - get: version
+      params: {bump: patch}
+    - get: concourse-whale
+    - get: voyager-cisco-engine
+      trigger: true
+      passed: [integration]
+  - task: build
+    image: concourse-whale
+    config:
+      platform: linux
+      inputs:
+      - name: voyager-cisco-engine
+      - name: version
+      outputs:
+      - name: build
+      params:
+        GITHUB_USER:        {{github_username}}
+        GITHUB_PASSWORD:    {{github_password}}
+      run:
+        path: voyager-cisco-engine/ci/tasks/build-candidate.sh
+  - put: docker-voyager-cisco-engine
+    params:
+      build: build
+      tag: version/version
+  - put: version
+    params: {file: version/version}
+
+resources:
+- name: voyager-cisco-engine
+  type: git
+  default-github: &github-secrets
+    username: {{github_username}}
+    password: {{github_password}}
+    skip_ssl_verification: true
+  source:
+    uri: https://github.com/RackHD/voyager-cisco-engine.git
+    branch: master
+    <<: *github-secrets
+
+- name: version
+  type: semver
+  source:
+    driver: git
+    uri: https://github.com/RackHD/voyager-cisco-engine.git
+    branch: version
+    file: version
+    <<: *github-secrets
+
+- name: it-env
+  type: pool
+  source:
+    uri: https://github.com/RackHD/voyager-release.git
+    branch: locks
+    pool: integration
+    <<: *github-secrets
+
+- name: concourse-whale
+  type: docker-image
+  source:
+    repository: {{concourse_whale_repository}}
+    insecure_registries: [{{docker_insecure_registries}}]
+
+- name: docker-voyager-cisco-engine
+  type: docker-image
+  source:
+    repository: {{docker_cisco_engine_private_repository}}
+    insecure_registries: [{{docker_insecure_registries}}]

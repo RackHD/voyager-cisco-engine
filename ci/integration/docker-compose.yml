@@ -1,0 +1,17 @@
+version: '2'
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+    - "5672:5672"
+    container_name: "rabbitmq"
+    hostname: "rabbitmq"
+
+  mysql:
+    image: mysql:8.0.0
+    ports:
+    - "3306:3306"
+    container_name: "mysql"
+    hostname: "mysql"
+    environment:
+    - MYSQL_ALLOW_EMPTY_PASSWORD=yes
